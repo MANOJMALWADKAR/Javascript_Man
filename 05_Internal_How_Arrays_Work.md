@@ -121,6 +121,9 @@ let mixed = ["a", "b", "c", "d"];      // Consistent PACKED
 
 ## 🏃‍♂️ Fast vs Dictionary Mode
 
+**NOTE=>** 
+          contiguous memory (packed arrays) is faster than hash maps (sparse arrays) because it has fewer steps, better cache locality, and allows more compiler/engine optimizations.
+
 Arrays can operate in two completely different modes, and the difference is **huge** for performance.
 
 ### Fast Mode (The Highway)
