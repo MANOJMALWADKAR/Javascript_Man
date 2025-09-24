@@ -5,6 +5,40 @@
 
 V8 doesn't just execute your array code - it **watches, learns, and optimizes** it for maximum performance. Here's how this magic happens:
 
+### Engine Representation Changes (Fast Path → Slow Path)
+
+Fast Path (Packed Array)
+
+  - Stored in a contiguous block of memory.
+  - Access is as simple as:
+  - No type checks per element (engine already knows the array holds only numbers, or only objects).
+  - Looping can be JIT-compiled to tight, vectorized machine code.
+
+Slow Path (Dictionary Mode)
+
+When a hole appears:
+
+  - The array’s internal representation changes to a hash map (key-value store).
+  
+  - Access now requires:
+  
+    1. Checking the hash table for that index.
+  
+    2. Verifying the key exists (because holes are possible).
+  
+    3. Returning undefined if not present.
+
+So arr[2] is no longer just base + offset — it’s a property lookup with a hash computation + pointer chasing.
+
+| **Packed Array**                                                            | **Sparse Array**                                                                     |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| ✅ **Contiguous memory** – CPU caches prefetch nearby elements automatically | ❌ **Scattered memory** – each lookup might be in a totally different memory location |
+| ✅ **No branching** – loop runs without conditionals                         | ❌ **Branching** – must check if index exists before returning                        |
+| ✅ **Unboxed values** – numbers stored directly as raw bits                  | ❌ **Boxed values** – numbers stored as objects/pointers                              |
+| ✅ **SIMD/vectorized loops** possible                                        | ❌ **No vectorization** – must handle each element individually                       |
+
+`This is why libraries like React, Redux, and modern frameworks encourage dense arrays and immutable updates — they let the engine stay on the fast path.`
+
 ## 1. 👁️ The Learning Phase (Interpreter)
 
 **What happens first:** V8 starts by running your code in **Ignition** (the interpreter).
