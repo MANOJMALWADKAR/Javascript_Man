@@ -2,8 +2,8 @@
 # Part 5: How Arrays Work Internally (Engine-Level Concepts)
 
 ## 🧠 Hidden Classes & Shapes
-
-JavaScript engines like V8 use **"hidden classes"** (also called **"shapes"** or **"maps"**) to optimize object and array access.
+ 
+hidden classes (also called "shapes" in some engines like V8) are one of the most important internal optimizations that make modern JavaScript fast.
 
 ### What are Hidden Classes?
 - Think of hidden classes as **blueprints** that describe the structure of objects/arrays
