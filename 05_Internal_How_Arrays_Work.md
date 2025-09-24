@@ -3,7 +3,112 @@
 
 ## 🧠 Hidden Classes & Shapes
  
-hidden classes (also called "shapes" in some engines like V8) are one of the most important internal optimizations that make modern JavaScript fast.
+Hidden classes (also called "shapes" in some engines like V8) are one of the most important internal optimizations that make modern JavaScript fast.
+
+### Why JS Engines Uses the Hidden Classes
+
+In Javascript, arrays are dynamic/flexible
+
+```js
+const obj = {};
+obj.name = "Alice";
+obj.age = 25;
+obj.city = "Paris";
+```
+Unlike C++/Java where objects have a fixed layout, JS objects can have:
+   - Properties added or removed at runtime
+   - Properties with different types
+
+This flexibility makes optimization hard — the engine can’t assume a fixed memory layout.
+
+### Solution: Hidden Classes
+
+Modern JS engines (like V8) internally create a "hidden class" to represent the structure of an object — basically a map of what properties it has and in what order.
+
+For example:
+```js
+const user = {};
+user.name = "Alice";
+user.age = 25;
+```
+
+1. When user is first created, V8 gives it a hidden class C0 (empty object).
+
+2. When you add .name, V8 creates a new hidden class C1 = "has property name".
+
+3. When you add .age, V8 creates a new hidden class C2 = "has properties name, age".
+
+`every time you add a property, the object transitions to a new hidden class that includes all previous properties + the new one.`
+
+Now user has a fixed layout in memory:
+
+```js
+Hidden class C2:
+  slot 0 -> name
+  slot 1 -> age
+```
+
+So accessing user.age is just:
+
+  - Look at user's hidden class
+   
+  - Find the memory slot for age
+   
+  - Read it directly
+
+This is almost as fast as a C struct access because the layout is known.
+
+### Hidden Class Transitions
+
+If you change the object structure in a different order, you get different hidden classes:
+
+```js
+const userA = {};
+userA.name = "Alice";
+userA.age = 25;
+
+const userB = {};
+userB.age = 25;
+userB.name = "Alice";
+```
+
+Even though userA and userB end up with the same properties, their hidden classes are different because properties were added in a different order.
+That means the JIT compiler can’t share the same optimized code for both — you lose some performance.
+
+### 🏎 Why It Matters for Performance
+
+Hidden classes enable:
+   
+   - Inline caching → JIT compiler can generate specialized code for obj.name instead of doing a generic lookup every time.
+   
+   - Fast property access → like C struct field access.
+   
+   - Optimized arrays → packed arrays are just objects with a special hidden class.
+
+But if you mutate objects in unpredictable ways (adding/removing properties dynamically), you cause:
+
+   - Hidden class churn → engine must rebuild layouts often.
+    
+   - Deoptimization → JIT compiler throws away optimized code and falls back to slower generic lookups.
+
+React encourages immutability (e.g., using setState with a new object instead of mutating the old one).
+
+When you create a new object with the same shape, it shares the same hidden class as previous ones — so property access stays fast.
+
+### To take advantage of hidden classes:
+
+Initialize all properties in the same order inside constructors or object literals:
+```js
+function Person(name, age) {
+  this.name = name;
+  this.age = age;
+}
+```
+instead of adding properties later.
+
+ - Avoid deleting properties if possible — that forces a new hidden class.
+ 
+ - Use consistent object shapes for similar objects.
 
 ### What are Hidden Classes?
 - Think of hidden classes as **blueprints** that describe the structure of objects/arrays
@@ -384,3 +489,7 @@ function slowSum(arr) {  // arr = [1,,3.5,"4",5]
 4. **Preallocate when possible**
 5. **Use consistent patterns** for inline caching
 6. **Consider Typed Arrays** for numeric computations
+7. Adding properties later = new hidden class = more work for the engine.
+8. Mutating object shape frequently → can cause deoptimizations → slower code.
+9. React’s immutability pattern actually helps because it creates new objects with the same shape, preserving optimizations.
+10. For arrays: keep them dense, don’t add properties, and avoid creating holes.
