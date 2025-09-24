@@ -10,6 +10,10 @@ These mistakes will turn your **blazing-fast arrays into slow crawlers**. Avoid 
 **What is a hole?** A missing element in an array that makes V8 lose all optimizations.
 
 ### How Holes Are Created:
+
+Using delete on array elements is worse than just setting them to undefined:
+
+So if you care about performance, never use delete on arrays — just overwrite with undefined or null.
 ```js
 // ❌ Method 1: Using delete
 let arr = [1, 2, 3, 4];
@@ -17,12 +21,19 @@ delete arr[1];                // Creates hole at index 1
 console.log(arr);            // [1, empty, 3, 4]
 console.log(arr[1]);         // undefined
 
+arr[1] = undefined    //Null can be added
+```
+
+```js
 // ❌ Method 2: Skipping indices
 let arr2 = [];
 arr2[0] = 'first';
 arr2[2] = 'third';           // Index 1 is a hole
 console.log(arr2);           // ['first', empty, 'third']
+```
+If you create a huge gap, the engine can’t allocate a huge contiguous block of memory, so it must use dictionary mode. So where Iteration becomes slow and Memory used inefficiently.
 
+```js
 // ❌ Method 3: Large gaps
 let arr3 = [1, 2];
 arr3[1000] = 'far away';     // Creates 998 holes!
