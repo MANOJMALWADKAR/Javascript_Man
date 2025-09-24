@@ -4,7 +4,6 @@
 ### 📦 Adding/Removing Elements in Arrays
 
 | Method     | What it does                          | Example               |
-
 |------------|---------------------------------------|-----------------------|
 | `push()`   | Adds an element at the end            | `arr.push('item')`    |
 | `pop()`    | Removes an element from the end       | `arr.pop()`           |
