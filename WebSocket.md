@@ -8,6 +8,17 @@ WebSocket is a bidirectional, full-duplex communication channel over a single TC
 
 - Protocol upgrade: Once accepted, the protocol is upgraded to WebSocket, and the TCP connection stays open.
 
+## WebSocket VS HTTP VS SSE
+
+| Feature         | HTTP            | WebSocket     | SSE             |
+| --------------- | --------------- | ------------- | --------------- |
+| Connection      | Short-lived     | Persistent    | Persistent      |
+| Direction       | Client → Server | Bidirectional | Server → Client |
+| Real-time       | ❌               | ✅             | ⚠️ Limited       |
+| Browser support | ✅               | ✅             | ✅               |
+| Binary data     | ❌               | ✅             | ❌               |
+
+
 ## How WebSocket Works (Under the Hood)
 
 ### Handshake(upgrade from http)
@@ -76,6 +87,31 @@ socket.onclose = function(event) {
 
 - socket.send(data) → Send string, Blob, ArrayBuffer, or ArrayBufferView.
 
+```js
+socket.send("Hello World")         // string
+```
+
+```js
+socket.send(JSON.stringify({      // JSON Object
+    type: "chat", 
+    text: "Hi" 
+}))
+```
+
+```js
+socket.send(new Blob([data],                // Blob
+    { type: 'application/octet-stream' }    //MIME type for binary data 
+))
+```
+
+```js
+socket.send(new Uint8Array([0x01, 0x02]))       //Typed Array
+```
+
+```js
+socket.send(new DataView(buffer))           // ArrayBufferView (TypedArray views)
+```
+
 - Incoming messages are delivered via onmessage.
 
 ### Closing the Connection
@@ -87,6 +123,67 @@ socket.close(code, reason);
 - code is optional (e.g., 1000 for normal closure).
 
 - reason is a human-readable string (max 123 bytes UTF-8).
+
+
+## Connection States
+
+| State        | Value | Description                   | Why Useful                                |
+| ------------ | ----- | ----------------------------- | ----------------------------------------- |
+| `CONNECTING` | 0     | Socket is trying to connect   | Avoid sending messages until open.        |
+| `OPEN`       | 1     | Connection established        | Safe to `send()` messages.                |
+| `CLOSING`    | 2     | Closing handshake in progress | Do not send new messages; wait for close. |
+| `CLOSED`     | 3     | Connection closed or failed   | Can attempt reconnect.                    |
+
+```js
+if(socket.readState === Websokcet.CONNECTING){
+    console.log("Socket is connecting... please wait.")
+}
+```
+
+```js
+if (socket.readyState === WebSocket.OPEN) {
+  socket.send("Hello Server!");
+} else {
+  console.warn("Socket not ready yet");
+}
+```
+```js
+if(socket.readyState === Websocket.CLOSING){
+    console.log("Socket is closing, cannot send new messages.");
+}
+```
+
+```js
+if(socket.readyState === WebSocket.CLOSED){
+    console.log("Socket is closed. Attempting reconnect...");
+    // Example: reconnect logic
+    // socket = new WebSocket("ws://example.com");
+}
+```
+
+
+# socket.addEventListener vs socket.onopen/onmessage/onerror/onclose(single handler)
+
+## 1. Single Handler (onmessage) – Simple & focused apps
+**Use case:** Small chat app or real-time notification system where all messages are handled together.
+
+**Scenario:**
+
+You have a dashboard that only needs to log all messages or display them in a single panel.
+
+Messages may have different types, but routing can be done inside one central handler.
+
+## 2. Multiple Handlers (addEventListener) – Modular & scalable apps
+
+**Use case:** Large apps where different modules need to respond independently to messages.
+
+**Scenario:**
+
+You have a real-time dashboard with **chat**, **notifications**, **analytics**, and **activity logs**.
+
+Each module should react independently to WebSocket messages.
+
+You might dynamically load/unload modules, e.g., popups or tabs.
 
 ## Protocol Framing (Under the Hood)
 
@@ -108,6 +205,8 @@ After upgrade:
 
 ### 1. 🧵 Subprotocols
 
+`NOTE: Many don’t realize subprotocols exist; they are only needed if server expects a specific protocol.`
+
 `mqtt:` IOT messaging via websocket
 
 `wamp.2.json:` Remote procedure calls, PubSub
@@ -120,7 +219,13 @@ After upgrade:
 
 `json:` Generic JSON message format
 
-WebSocket subprotocols are application-level protocols layered over WebSocket. They are negotiated during the handshake.
+WebSocket subprotocols are application-level protocols layered over WebSocket. They are negotiated during the handshake. **Based on the which subprotocol is backend setup is accepting.**
+
+Default: If no subprotocol provided, no protocol is used (empty string ""). Most browsers just use plain WebSocket.
+
+Only one subprotocol is active per connection.
+
+If the server does not support any of the proposed subprotocols, it may reject the connection or accept it without a subprotocol.
 
 ```js
 const socket = new WebSocket("wss://example.com/ws", "chat");
@@ -366,13 +471,44 @@ Just like HTTPS, use WSS (WebSocket Secure) so the connection is encrypted.
 
 This keeps data private and safe from eavesdroppers or man-in-the-middle attacks.
 
-#### Authentication and Authorization
+# Authentication and Authorization
 
 WebSockets don’t have built-in login or permission checks.
 
 You need to implement your own way to make sure the user is allowed to use the connection (e.g., tokens, cookies).
 
 Otherwise, anyone who knows the URL could connect.
+
+Here’s a **clear, concise summary of WebSocket authentication**, especially in browser vs backend contexts:
+
+`REST APIs → safe to send auth headers because browser enforces CORS.`
+
+`WebSocket in browsers → cannot send headers because it’s persistent and bypassing headers could leak credentials or allow cross-site attacks.`
+
+## **1. Why Authentication is Needed**
+
+* WebSockets are **stateful and long-lived**, so the server must verify the client before processing messages.
+* Unauthenticated connections can lead to **data leaks, unauthorized actions, or abuse**.
+
+---
+
+## **2. Browser Clients**
+
+* **Cannot set custom headers** (`Authorization`) due to **security restrictions** (prevent CSRF and credential leaks).
+* Recommended methods:
+
+ **Send token in the first message after connection** (preferred):
+
+     ```js
+     socket.onopen = () => {
+       socket.send(JSON.stringify({ type: "auth", token: "YOUR_JWT" }));
+     };
+     ```
+
+  2. **Use cookies/session tokens** (if same origin)
+  3. **Short-lived query parameters** (`wss://example.com/socket?token=XYZ`) — less secure
+
+ 
 
 
 ### 5. ♻️ Reconnection Strategies
@@ -452,9 +588,13 @@ socket.onopen = () => {
 
 Multiplexing refers to using a single WebSocket connection to handle multiple logical communication channels or topics (like rooms, services, streams, etc.).
 
-Think of it like using one cable to carry multiple TV channels — instead of opening a separate connection for each.
+**Concept:** Single WebSocket Connection with Multiplexing
 
-To multiplex effectively, each message must include routing info — like a channel, room, or type — so the server knows what to do with it and where to send replies.
+**Problem:** Opening multiple WebSocket connections (e.g., one for chat, one for notifications, one for analytics) is resource-heavy and can hit browser or server limits.
+
+**Solution:** Open one WebSocket connection and send messages with a channel/module/type identifier.
+
+Each message carries metadata to indicate which “logical socket” it belongs to.
 
 ```json
 {
@@ -464,6 +604,35 @@ To multiplex effectively, each message must include routing info — like a chan
     "symbol": "AAPL"
   }
 }
+//OR
+{
+  "channel": "chat",
+  "event": "newMessage",
+  "data": { "user": "Alice", "message": "Hello!" }
+}
+
+```
+
+```js
+const socket = new WebSocket("ws://example.com");
+
+socket.onmessage = (event) => {
+  const msg = JSON.parse(event.data);
+
+  switch (msg.channel) {
+    case "chat":
+      handleChat(msg.data);
+      break;
+    case "notifications":
+      handleNotification(msg.data);
+      break;
+    case "analytics":
+      handleAnalytics(msg.data);
+      break;
+    default:
+      console.warn("Unknown channel:", msg.channel);
+  }
+};
 ```
 
 ```js
@@ -510,3 +679,5 @@ Always use encrypted connections to protect tokens from being intercepted.
 3. Don’t trust client data blindly
 
 Always validate tokens or sessions on the server side.
+
+
